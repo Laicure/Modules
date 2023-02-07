@@ -1,16 +1,18 @@
-Imports System.Data.SQLite
 
-Module Mod_SQLite
 
-#Region "SQLite"
+Imports System.Data.SqlClient
 
-	Friend str_SQLitePath As String = ""
-	Friend str_SQLiteConn As String = ""
+Module Mod_SQLClient
+
+#Region "SQL"
+
+	Friend str_SQLPath As String = ""
+	Friend str_SQLConn As String = ""
 
 	Friend Function SQLReadQuery(comText As String, Optional Paramzz As List(Of SQLParamz) = Nothing) As DataTable
 		If Paramzz Is Nothing Then Paramzz = New List(Of SQLParamz)()
 
-		Using conX As New SQLiteConnection(str_SQLiteConn), comX As New SQLiteCommand(comText.Trim(), conX), dtx As New DataTable()
+		Using conX As New SqlConnection(str_SQLConn), comX As New SqlCommand(comText.Trim(), conX), dtx As New DataTable()
 			If conX.State = ConnectionState.Closed Then conX.Open()
 
 			If Paramzz.Count > 0 Then
@@ -21,7 +23,7 @@ Module Mod_SQLite
 				End If
 			End If
 
-			Using readerX As SQLiteDataReader = comX.ExecuteReader()
+			Using readerX As SqlDataReader = comX.ExecuteReader()
 				dtx.Load(readerX)
 			End Using
 
@@ -35,7 +37,7 @@ Module Mod_SQLite
 
 	Friend Sub SQLWriteQuery(comText As String, Optional Paramzz As List(Of SQLParamz) = Nothing, Optional useTransaction As Boolean = True)
 		If Paramzz Is Nothing Then Paramzz = New List(Of SQLParamz)()
-		Using conX As New SQLiteConnection(str_SQLiteConn), comX As New SQLiteCommand(comText.Trim(), conX)
+		Using conX As New SqlConnection(str_SQLConn), comX As New SqlCommand(comText.Trim(), conX)
 			If conX.State = ConnectionState.Closed Then conX.Open()
 
 			If Paramzz.Count > 0 Then
@@ -47,7 +49,7 @@ Module Mod_SQLite
 			End If
 
 			If useTransaction Then
-				Using transX As SQLiteTransaction = conX.BeginTransaction
+				Using transX As SqlTransaction = conX.BeginTransaction
 					comX.Transaction = transX
 					Try
 						comX.ExecuteNonQuery()
@@ -70,9 +72,9 @@ Module Mod_SQLite
 	End Sub
 
 	Friend Sub SQLDtToDb(DtSource As DataTable, SQLTable As String, SQLColumns() As String)
-		Using conX As New SQLite.SQLiteConnection(str_SQLiteConn), comX As New SQLite.SQLiteCommand(conX)
+		Using conX As New SqlConnection(str_SQLConn), comX As New SqlCommand("", conX)
 			If conX.State = ConnectionState.Closed Then conX.Open()
-			Using transX As SQLiteTransaction = conX.BeginTransaction
+			Using transX As SqlTransaction = conX.BeginTransaction
 				With comX
 					.Transaction = transX
 					Try
