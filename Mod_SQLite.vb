@@ -2,122 +2,113 @@ Imports System.Data.SQLite
 
 Module Mod_SQLite
 
-#Region "SQLite"
+    Friend str_SQLitePath As String = ""
+    Friend str_SQLiteConn As String = ""
 
-	Friend str_SQLitePath As String = ""
-	Friend str_SQLiteConn As String = ""
+    Friend Function SQLReadQuery(comText As String, Optional Paramzz As List(Of SQLParamz) = Nothing) As DataTable
+        If Paramzz Is Nothing Then Paramzz = New List(Of SQLParamz)()
 
-	Friend Function SQLReadQuery(comText As String, Optional Paramzz As List(Of SQLParamz) = Nothing) As DataTable
-		If Paramzz Is Nothing Then Paramzz = New List(Of SQLParamz)()
+        Using conX As New SQLiteConnection(str_SQLiteConn),
+              comX As New SQLiteCommand(comText.Trim(), conX),
+              dtx As New DataTable()
 
-		Using conX As New SQLiteConnection(str_SQLiteConn), comX As New SQLiteCommand(comText.Trim(), conX), dtx As New DataTable()
-			If conX.State = ConnectionState.Closed Then conX.Open()
+            If conX.State = ConnectionState.Closed Then conX.Open()
 
-			If Paramzz.Count > 0 Then
-				If Paramzz.Count > 0 Then
-					For i = 0 To Paramzz.Count - 1
-						If comText.Contains(Paramzz(i).Parame) Then comX.Parameters.AddWithValue(Paramzz(i).Parame, Paramzz(i).Value)
-					Next
-				End If
-			End If
+            ' Add parameters if present
+            For Each param In Paramzz
+                If comText.Contains(param.Parame) Then
+                    comX.Parameters.AddWithValue(param.Parame, param.Value)
+                End If
+            Next
 
-			Using readerX As SQLiteDataReader = comX.ExecuteReader()
-				dtx.Load(readerX)
-			End Using
+            Using readerX As SQLiteDataReader = comX.ExecuteReader()
+                dtx.Load(readerX)
+            End Using
 
-			If conX.State = ConnectionState.Open Then conX.Close()
-			GC.Collect()
-			GC.WaitForPendingFinalizers()
+            Return dtx
+        End Using
+    End Function
 
-			Return dtx
-		End Using
-	End Function
+    Friend Sub SQLWriteQuery(comText As String, Optional Paramzz As List(Of SQLParamz) = Nothing, Optional useTransaction As Boolean = True)
+        If Paramzz Is Nothing Then Paramzz = New List(Of SQLParamz)()
 
-	Friend Sub SQLWriteQuery(comText As String, Optional Paramzz As List(Of SQLParamz) = Nothing, Optional useTransaction As Boolean = True)
-		If Paramzz Is Nothing Then Paramzz = New List(Of SQLParamz)()
-		Using conX As New SQLiteConnection(str_SQLiteConn), comX As New SQLiteCommand(comText.Trim(), conX)
-			If conX.State = ConnectionState.Closed Then conX.Open()
+        Using conX As New SQLiteConnection(str_SQLiteConn),
+              comX As New SQLiteCommand(comText.Trim(), conX)
+            
+            If conX.State = ConnectionState.Closed Then conX.Open()
 
-			If Paramzz.Count > 0 Then
-				If Paramzz.Count > 0 Then
-					For i = 0 To Paramzz.Count - 1
-						If comText.Contains(Paramzz(i).Parame) Then comX.Parameters.AddWithValue(Paramzz(i).Parame, Paramzz(i).Value)
-					Next
-				End If
-			End If
+            ' Add parameters if present
+            For Each param In Paramzz
+                If comText.Contains(param.Parame) Then
+                    comX.Parameters.AddWithValue(param.Parame, param.Value)
+                End If
+            Next
 
-			If useTransaction Then
-				Using transX As SQLiteTransaction = conX.BeginTransaction
-					comX.Transaction = transX
-					Try
-						comX.ExecuteNonQuery()
-						transX.Commit()
-						Console.WriteLine("SQLWriteQuery: Written!")
-					Catch ex As Exception
-						transX.Rollback()
-						Console.WriteLine("SQLWriteQuery: (" & ex.Source & ")" & ex.Message)
-						Throw
-					End Try
-				End Using
-			Else
-				comX.ExecuteNonQuery()
-			End If
+            If useTransaction Then
+                Using transX As SQLiteTransaction = conX.BeginTransaction()
+                    Try
+                        comX.Transaction = transX
+                        comX.ExecuteNonQuery()
+                        transX.Commit()
+                        Console.WriteLine("SQLWriteQuery: Written!")
+                    Catch ex As Exception
+                        transX.Rollback()
+                        Console.WriteLine($"SQLWriteQuery Error: {ex.Message}")
+                        Throw
+                    End Try
+                End Using
+            Else
+                comX.ExecuteNonQuery()
+            End If
+        End Using
+    End Sub
 
-			If conX.State = ConnectionState.Open Then conX.Close()
-			GC.Collect()
-			GC.WaitForPendingFinalizers()
-		End Using
-	End Sub
+    Friend Sub SQLDtToDb(DtSource As DataTable, SQLTable As String, SQLColumns() As String)
+        Using conX As New SQLiteConnection(str_SQLiteConn),
+              comX As New SQLiteCommand("", conX)
+            
+            If conX.State = ConnectionState.Closed Then conX.Open()
+            Using transX As SQLiteTransaction = conX.BeginTransaction()
+                Try
+                    comX.Transaction = transX
+                    comX.CommandText = $"DELETE FROM [{SQLTable}];"
+                    comX.ExecuteNonQuery()
 
-	Friend Sub SQLDtToDb(DtSource As DataTable, SQLTable As String, SQLColumns() As String)
-		Using conX As New SQLite.SQLiteConnection(str_SQLiteConn), comX As New SQLite.SQLiteCommand(conX)
-			If conX.State = ConnectionState.Closed Then conX.Open()
-			Using transX As SQLiteTransaction = conX.BeginTransaction
-				With comX
-					.Transaction = transX
-					Try
-						If DtSource.Rows.Count = 0 Then
-							.CommandText = "delete from " & SQLTable & ";"
-							.ExecuteNonQuery()
-						Else
-							.CommandText = "delete from " & SQLTable & ";"
-							.ExecuteNonQuery()
+                    If DtSource.Rows.Count > 0 Then
+                        Dim insertCount As Integer = 0
+                        Dim transacQuery As New Text.StringBuilder()
 
-							Dim insertCount As Integer = 0
-							Dim transacQuery As String = ""
-							For Each dr As DataRow In DtSource.Rows
-								insertCount += 1
-								Dim valuez As New List(Of String)
-								For Each dc As DataColumn In DtSource.Columns
-									valuez.Add(dr.Item(dc).ToString.Replace("'", "''"))
-								Next
-								transacQuery &= Trim("insert into [" & SQLTable & "] ([" & String.Join("], [", SQLColumns) & "]) values ('" & String.Join("', '", valuez.ToArray) & "')") & ";" & str_newLine
-								If insertCount = 777 Then
-									.CommandText = transacQuery
-									.ExecuteNonQuery()
-									transacQuery = ""
-									insertCount = 0
-								End If
-							Next
-							If insertCount < 777 Then
-								.CommandText = transacQuery
-								.ExecuteNonQuery()
-								transacQuery = ""
-							End If
-						End If
+                        For Each dr As DataRow In DtSource.Rows
+                            insertCount += 1
+                            Dim valuez = DtSource.Columns.Cast(Of DataColumn)()
+                                        .Select(Function(dc) dr(dc).ToString().Replace("'", "''"))
+                                        .ToArray()
 
-						transX.Commit()
-						Console.WriteLine(SQLTable & ": Written @ " & DateTime.UtcNow.Subtract(dtm_ExecStart).ToString.Substring(0, 8))
-					Catch ex As Exception
-						transX.Rollback()
-						Console.WriteLine(SQLTable & ": (" & ex.Source & ") " & ex.Message)
-						Throw
-					End Try
-				End With
-			End Using
-		End Using
-	End Sub
+                            transacQuery.AppendLine($"INSERT INTO [{SQLTable}] ([{String.Join("], [", SQLColumns)}]) VALUES ('{String.Join("', '", valuez)}');")
 
-#End Region
+                            If insertCount = 777 Then
+                                comX.CommandText = transacQuery.ToString()
+                                comX.ExecuteNonQuery()
+                                transacQuery.Clear()
+                                insertCount = 0
+                            End If
+                        Next
+
+                        If transacQuery.Length > 0 Then
+                            comX.CommandText = transacQuery.ToString()
+                            comX.ExecuteNonQuery()
+                        End If
+                    End If
+
+                    transX.Commit()
+                    Console.WriteLine($"{SQLTable}: Written @ {DateTime.UtcNow.Subtract(dtm_ExecStart).ToString().Substring(0, 8)}")
+                Catch ex As Exception
+                    transX.Rollback()
+                    Console.WriteLine($"{SQLTable}: ({ex.Source}) {ex.Message}")
+                    Throw
+                End Try
+            End Using
+        End Using
+    End Sub
 
 End Module
