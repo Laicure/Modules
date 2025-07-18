@@ -1,3 +1,11 @@
+' put in sheet code, not in module or workbook
+Private Sub Worksheet_SelectionChange(ByVal Target As Range)
+    If Target.Address = Me.Range("E20").Address Then
+        CalendarForm.Show vbModal
+    End If
+End Sub
+'-------------------------------------------------------------------------------
+
 Option Explicit
 
 Private currentYear  As Integer
